@@ -1,4 +1,5 @@
 import SwiftUI
+import SpacemapCore
 
 struct GridView: View {
     let state: GridState

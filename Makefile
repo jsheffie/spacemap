@@ -7,7 +7,7 @@ VERSION  := $(shell cat VERSION)
 ARCHIVE   = spacemap-$(VERSION).zip
 STAGE     = spacemap-$(VERSION)
 
-.PHONY: build app install run dev uninstall clean config distconfig permissions archive
+.PHONY: build app install run dev uninstall clean config distconfig permissions archive ls-tool
 
 build:
 	swift build -c release
@@ -77,6 +77,11 @@ permissions:
 	@echo ""
 	@echo "NEVER run the binary directly — always use 'make run' or 'open $(INSTALL_PATH)'"
 	@echo "Running the binary directly causes AXIsProcessTrusted() to return false."
+
+ls-tool:
+	swift build -c release --product spacemap-ls
+	cp $(BUILD_DIR)/spacemap-ls /usr/local/bin/spacemap-ls
+	@echo "Installed spacemap-ls to /usr/local/bin/spacemap-ls"
 
 clean:
 	rm -rf .build $(APP_BUNDLE)

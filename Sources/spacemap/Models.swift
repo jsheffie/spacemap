@@ -1,5 +1,5 @@
-import Foundation
 import CoreGraphics
+import SpacemapCore
 
 enum CellStyle { case rects, icons, hybrid }
 
@@ -19,44 +19,6 @@ struct GridConfig {
     var socketHealthInterval: Int
 
     static let `default` = GridConfig(cols: 8, rows: 2, cellStyle: .rects, hotkey: .default, socketHealthInterval: 60)
-}
-
-struct YabaiSpace: Decodable {
-    let id: Int
-    let index: Int
-    let display: Int
-    let hasFocus: Bool
-
-    enum CodingKeys: String, CodingKey {
-        case id, index, display
-        case hasFocus = "has-focus"
-    }
-}
-
-struct YabaiWindow: Decodable {
-    let id: Int
-    let app: String
-    let space: Int
-    let frame: WindowFrame
-    let isHidden: Bool
-    let isMinimized: Bool
-
-    struct WindowFrame: Decodable {
-        let x: CGFloat
-        let y: CGFloat
-        let w: CGFloat
-        let h: CGFloat
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case id, app, space, frame
-        case isHidden = "is-hidden"
-        case isMinimized = "is-minimized"
-    }
-
-    var cgFrame: CGRect {
-        CGRect(x: frame.x, y: frame.y, width: frame.w, height: frame.h)
-    }
 }
 
 struct GridState {

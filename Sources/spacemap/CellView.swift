@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import SpacemapCore
 
 struct CellView: View {
     let spaceIndex: Int

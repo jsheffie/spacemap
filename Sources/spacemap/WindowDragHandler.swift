@@ -1,4 +1,5 @@
 import Cocoa
+import SpacemapCore
 
 // Detects when the user drags a real macOS window over the HUD.
 // Uses a passive global CGEventTap to track mouse position and NSWorkspace to

@@ -1,4 +1,5 @@
 import AppKit
+import SpacemapCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hud = HUDWindowController()
