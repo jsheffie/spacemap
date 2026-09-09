@@ -113,7 +113,14 @@ struct CellView: View {
     }
 
     private func appColor(_ name: String) -> Color {
-        let hue = Double(abs(name.hashValue) % 360) / 360.0
+        // FNV-1a over UTF-8. Deliberately not `name.hashValue`: Swift seeds String
+        // hashing per process, so that produced a new palette on every launch (#31).
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in name.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x100000001b3
+        }
+        let hue = Double(hash % 360) / 360.0
         return Color(hue: hue, saturation: 0.7, brightness: 0.9)
     }
 }
