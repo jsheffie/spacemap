@@ -21,7 +21,7 @@ struct GridView: View {
                             isFocused: spaceIndex == state.focusedIndex,
                             isDropTarget: spaceIndex == hoveredCell,
                             windows: state.windows(forSpace: spaceIndex),
-                            displayBounds: state.displayBounds,
+                            displayBounds: state.displayFrame(forSpace: spaceIndex),
                             cellStyle: state.config.cellStyle,
                             onSelect: onSelect
                         )

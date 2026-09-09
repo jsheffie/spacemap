@@ -37,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Show/Hide Map", action: #selector(toggleHUD), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Open Accessibility Permissions", action: #selector(openAccessibility), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Repaint spacemap", action: #selector(repaintHUD), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Restart spacemap", action: #selector(restartApp), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit spacemap", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -45,6 +46,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleHUD() { hud.toggle() }
+
+    @objc private func repaintHUD() { hud.repaint() }
 
     @objc private func openAccessibility() {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!

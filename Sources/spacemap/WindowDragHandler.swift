@@ -131,7 +131,8 @@ class WindowDragHandler {
 
     // AXUIElementCopyElementAtPosition uses top-left-origin; CGEvent uses bottom-left.
     private func cgToAX(_ cgPoint: CGPoint) -> CGPoint {
-        guard let screen = NSScreen.screens.first else { return cgPoint }
+        // NSScreen.main to match the panel placement and hit rects in HUDWindowController.
+        guard let screen = NSScreen.main else { return cgPoint }
         return CGPoint(x: cgPoint.x, y: screen.frame.height - cgPoint.y)
     }
 

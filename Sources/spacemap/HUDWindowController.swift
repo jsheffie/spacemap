@@ -56,6 +56,17 @@ class HUDWindowController {
         }
     }
 
+    // Menubar "Repaint spacemap". Forces a fresh config read and yabai query, and
+    // rebuilds + re-centers the panel -- unlike refreshState(), which deliberately
+    // re-renders in place to avoid flicker on fast space switching. A resolution
+    // change needs the re-center, since the panel is positioned from NSScreen.main.
+    // Note this cannot fix stale yabai *window* frames: macOS never re-lays-out a
+    // non-visible space, so those frames stay wrong (see #43 and CellView).
+    func repaint() {
+        cancelAutoHide()
+        show(as: .sticky)
+    }
+
     private func show(as mode: Visibility) {
         config = ConfigReader.load()
         let focusedIndex = YabaiClient.queryFocusedSpaceIndex()
@@ -67,7 +78,11 @@ class HUDWindowController {
         currentState = state
         dragHandler.cachedWindows = state.windows
         // Capture focused window before HUD renders, so drag handler knows what the user had active.
-        dragHandler.focusedWindowIDAtOpen = (try? YabaiClient.queryFocusedWindow()) ?? nil
+        // Only on a genuine open: repainting an already-visible HUD must not replace
+        // the window the user had active with whatever happens to be focused now.
+        if visibility == .hidden {
+            dragHandler.focusedWindowIDAtOpen = (try? YabaiClient.queryFocusedWindow()) ?? nil
+        }
         renderState(state, panel: panel)
         updateCellFrames(state: state, panel: panel)
         // Skip the global CGEventTap for a transient show: dragging a window into a HUD
@@ -186,7 +201,9 @@ class HUDWindowController {
         // CGEvent.location uses top-left origin (Y increases downward).
         // NSPanel.frame uses bottom-left origin (Y increases upward).
         // Convert panel origin to CGEvent coords: cgY = screenHeight - appKitY - height
-        guard let screen = NSScreen.screens.first else { return }
+        // Must match the screen renderState() centers the panel on, or hit rects are
+        // computed against a different origin than the panel actually sits at.
+        guard let screen = NSScreen.main else { return }
         let screenHeight = screen.frame.height
 
         for row in 0..<state.config.rows {
