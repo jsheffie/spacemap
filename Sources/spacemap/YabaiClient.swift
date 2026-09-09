@@ -14,6 +14,11 @@ enum YabaiClient {
         return try JSONDecoder().decode([YabaiWindow].self, from: Data(output.utf8))
     }
 
+    static func queryDisplays() throws -> [YabaiDisplay] {
+        let output = try shell(yabaiPath, "-m", "query", "--displays")
+        return try JSONDecoder().decode([YabaiDisplay].self, from: Data(output.utf8))
+    }
+
     static func queryFocusedWindow() throws -> Int? {
         let output = try shell(yabaiPath, "-m", "query", "--windows", "--window")
         guard let data = output.data(using: .utf8),
@@ -51,8 +56,26 @@ enum YabaiClient {
     static func buildGridState(config: GridConfig, focusedIndex: Int?) -> GridState {
         let spaces = (try? querySpaces()) ?? []
         let windows = (try? queryWindows()) ?? []
-        let displayBounds = NSScreen.main?.frame ?? CGRect(x: 0, y: 0, width: 2560, height: 1440)
-        return GridState(config: config, spaces: spaces, windows: windows, displayBounds: displayBounds, focusedIndex: focusedIndex)
+        let displays = (try? queryDisplays()) ?? []
+
+        // Key by index, matching YabaiSpace.display. See the note in GridState.
+        var displayFrames: [Int: CGRect] = [:]
+        for display in displays { displayFrames[display.index] = display.cgFrame }
+
+        // Fallback when yabai can't be reached. yabai frames are top-left origin in
+        // points; NSScreen.frame is bottom-left, so only its size is meaningful here.
+        let fallbackSize = NSScreen.main?.frame.size ?? CGSize(width: 2560, height: 1440)
+        let displayBounds = displayFrames[1]
+            ?? CGRect(origin: .zero, size: fallbackSize)
+
+        return GridState(
+            config: config,
+            spaces: spaces,
+            windows: windows,
+            displayFrames: displayFrames,
+            displayBounds: displayBounds,
+            focusedIndex: focusedIndex
+        )
     }
 
     private static func shell(_ args: String...) throws -> String {

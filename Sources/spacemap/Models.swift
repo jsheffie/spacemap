@@ -61,14 +61,36 @@ struct YabaiWindow: Decodable {
     }
 }
 
+struct YabaiDisplay: Decodable {
+    let id: Int
+    let index: Int
+    let frame: YabaiWindow.WindowFrame
+
+    var cgFrame: CGRect {
+        CGRect(x: frame.x, y: frame.y, width: frame.w, height: frame.h)
+    }
+}
+
 struct GridState {
     let config: GridConfig
     let spaces: [YabaiSpace]
     let windows: [YabaiWindow]
+    // Keyed by display *index* (1-based arrangement order), because that is what
+    // YabaiSpace.display holds -- not the display id. On a single-display Mac id and
+    // index are both 1, so keying by id would look correct and break once docked.
+    let displayFrames: [Int: CGRect]
+    // Fallback for a space whose display has no entry in displayFrames.
     let displayBounds: CGRect
     let focusedIndex: Int?
 
     func windows(forSpace index: Int) -> [YabaiWindow] {
         windows.filter { $0.space == index }
+    }
+
+    // The frame of the display that owns this space, for scaling window rects.
+    func displayFrame(forSpace index: Int) -> CGRect {
+        guard let space = spaces.first(where: { $0.index == index }),
+              let frame = displayFrames[space.display] else { return displayBounds }
+        return frame
     }
 }

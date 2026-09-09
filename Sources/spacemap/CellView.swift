@@ -17,13 +17,23 @@ struct CellView: View {
             RoundedRectangle(cornerRadius: 4)
                 .fill(isDropTarget ? Color.green.opacity(0.35) : isFocused ? Color(hex: 0x4a9eff).opacity(0.55) : Color.black.opacity(0.25))
 
-            ForEach(windows, id: \.id) { window in
-                switch cellStyle {
-                case .rects:  windowRect(window)
-                case .icons:  windowIcon(window)
-                case .hybrid: windowRect(window)
+            // Window thumbnails live in their own sized+clipped container. The outer
+            // ZStack's .frame is applied after .overlay below, so its children are
+            // unconstrained -- clipping out there would clip to the wrong bounds and
+            // do nothing. yabai can report frames sized for a display resolution
+            // that no longer applies (#43), so this is the backstop for float
+            // rounding after scaledRect() has already trimmed the geometry.
+            ZStack(alignment: .topLeading) {
+                ForEach(windows, id: \.id) { window in
+                    switch cellStyle {
+                    case .rects:  windowRect(window)
+                    case .icons:  windowIcon(window)
+                    case .hybrid: windowRect(window)
+                    }
                 }
             }
+            .frame(width: cellSize.width, height: cellSize.height, alignment: .topLeading)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
 
             if cellStyle == .icons || cellStyle == .hybrid {
                 iconStrip()
@@ -45,39 +55,80 @@ struct CellView: View {
         .onTapGesture { onSelect(spaceIndex) }
     }
 
-    @ViewBuilder
-    private func windowRect(_ window: YabaiWindow) -> some View {
+    // The portion of a window actually on this display, scaled into cell coords.
+    // Intersecting *before* scaling is what fixes #43: after a resolution change
+    // yabai still reports pre-change frames for windows on non-visible spaces (a
+    // 3440x1415 frame on a 1728x1117 display), and dividing that by the current
+    // display size overflows the cell. Clipping to the display models "what part of
+    // this window is really here" and handles genuinely offscreen windows the same way.
+    private struct ScaledRect {
+        let rect: CGRect
+        // True when the raw frame wasn't fully on the display -- stale geometry or a
+        // legitimately offscreen window. Both mean the rect shown is partial.
+        let isClipped: Bool
+    }
+
+    private func scaledRect(_ window: YabaiWindow, minSize: CGFloat) -> ScaledRect? {
+        let visible = window.cgFrame.intersection(displayBounds)
+        guard !visible.isNull, !visible.isEmpty else { return nil }
+
         let scaleX = cellSize.width / displayBounds.width
         let scaleY = cellSize.height / displayBounds.height
-        let x = (window.cgFrame.minX - displayBounds.minX) * scaleX
-        let y = (window.cgFrame.minY - displayBounds.minY) * scaleY
-        let w = max(window.cgFrame.width * scaleX, 2)
-        let h = max(window.cgFrame.height * scaleY, 2)
+        let w = max(visible.width * scaleX, minSize)
+        let h = max(visible.height * scaleY, minSize)
+        // Pull the origin back in if the minimum-size floor pushed the rect past the
+        // cell edge. A window sitting a few px from the display's right edge scales
+        // to a sub-pixel sliver, and inflating it to minSize would otherwise overhang.
+        let x = min((visible.minX - displayBounds.minX) * scaleX, cellSize.width - w)
+        let y = min((visible.minY - displayBounds.minY) * scaleY, cellSize.height - h)
+        let rect = CGRect(x: max(x, 0), y: max(y, 0), width: w, height: h)
+        return ScaledRect(rect: rect, isClipped: !displayBounds.contains(window.cgFrame))
+    }
 
-        RoundedRectangle(cornerRadius: 1)
-            .fill(appColor(window.app).opacity(0.6))
-            .frame(width: w, height: h)
-            .offset(x: x, y: y)
+    // Marks geometry we can't fully trust, so a clipped rect doesn't read as
+    // "one window fills this desktop". A full dashed perimeter was tried first and
+    // was far too loud: on a machine that has changed resolution most windows retain
+    // dimensions that no longer fit (64% here), and a stale rect scales to fill its
+    // cell, so the dashes traced almost every cell border and dominated the map.
+    // A single corner tick states the same fact and stays out of the way.
+    @ViewBuilder
+    private func staleMarker(_ scaled: ScaledRect) -> some View {
+        if scaled.isClipped {
+            Path { path in
+                let inset: CGFloat = 1.5
+                let len: CGFloat = 4
+                let x = scaled.rect.width - inset
+                path.move(to: CGPoint(x: x - len, y: inset))
+                path.addLine(to: CGPoint(x: x, y: inset))
+                path.addLine(to: CGPoint(x: x, y: inset + len))
+            }
+            .stroke(Color.white.opacity(0.5), lineWidth: 1)
+        }
+    }
+
+    @ViewBuilder
+    private func windowRect(_ window: YabaiWindow) -> some View {
+        if let scaled = scaledRect(window, minSize: 2) {
+            RoundedRectangle(cornerRadius: 1)
+                .fill(appColor(window.app).opacity(0.6))
+                .overlay(staleMarker(scaled))
+                .frame(width: scaled.rect.width, height: scaled.rect.height)
+                .offset(x: scaled.rect.minX, y: scaled.rect.minY)
+        }
     }
 
     @ViewBuilder
     private func windowIcon(_ window: YabaiWindow) -> some View {
-        if !window.isHidden && !window.isMinimized {
-            let scaleX = cellSize.width / displayBounds.width
-            let scaleY = cellSize.height / displayBounds.height
-            let x = (window.cgFrame.minX - displayBounds.minX) * scaleX
-            let y = (window.cgFrame.minY - displayBounds.minY) * scaleY
-            let w = max(window.cgFrame.width * scaleX, 14)
-            let h = max(window.cgFrame.height * scaleY, 14)
-            let iconSize = min(w, h)
-
-            if let icon = appIcon(for: window.app) {
-                Image(nsImage: icon)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: iconSize, height: iconSize)
-                    .offset(x: x, y: y)
-            }
+        if !window.isHidden && !window.isMinimized,
+           let scaled = scaledRect(window, minSize: 14),
+           let icon = appIcon(for: window.app) {
+            let iconSize = min(scaled.rect.width, scaled.rect.height)
+            Image(nsImage: icon)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: iconSize, height: iconSize)
+                .overlay(staleMarker(scaled))
+                .offset(x: scaled.rect.minX, y: scaled.rect.minY)
         }
     }
 
