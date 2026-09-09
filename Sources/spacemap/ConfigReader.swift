@@ -13,6 +13,7 @@ enum ConfigReader {
         var cellStyle = GridConfig.default.cellStyle
         var hotkey = GridConfig.default.hotkey
         var socketHealthInterval = GridConfig.default.socketHealthInterval
+        var autoShowDuration = GridConfig.default.autoShowDuration
 
         for line in contents.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -42,11 +43,18 @@ enum ConfigReader {
                 } else {
                     print("spacemap: invalid SOCKET_HEALTH_INTERVAL '\(value)', using default")
                 }
+            case "AUTO_SHOW_DURATION":
+                // 0 is valid here and means "disabled", unlike SOCKET_HEALTH_INTERVAL.
+                if let v = Double(value), v >= 0 {
+                    autoShowDuration = v
+                } else {
+                    print("spacemap: invalid AUTO_SHOW_DURATION '\(value)', using default")
+                }
             default: break
             }
         }
 
-        return GridConfig(cols: cols, rows: rows, cellStyle: cellStyle, hotkey: hotkey, socketHealthInterval: socketHealthInterval)
+        return GridConfig(cols: cols, rows: rows, cellStyle: cellStyle, hotkey: hotkey, socketHealthInterval: socketHealthInterval, autoShowDuration: autoShowDuration)
     }
 
     private static func parseHotkey(_ value: String) -> HotkeyConfig? {

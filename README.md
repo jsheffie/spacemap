@@ -80,6 +80,21 @@ GRID_ROWS=2
 #HOTKEY=ctrl+shift+s  # example with multiple modifiers
 ```
 
+### Auto-show on desktop switch
+
+When you switch desktops while spacemap is hidden, the HUD flashes up briefly so you
+can see where you landed in the grid. `AUTO_SHOW_DURATION` sets how long, in seconds.
+Switching again restarts the timer from 0. Set it to `0` to disable the feature.
+
+If spacemap is already shown, switching desktops just updates the highlighted cell —
+it stays up until you hide it. Pressing the hotkey while the HUD is briefly showing
+keeps it up, so you can take a closer look.
+
+```bash
+#AUTO_SHOW_DURATION=2    # default; 0 disables
+#AUTO_SHOW_DURATION=1.5  # fractional seconds are fine
+```
+
 ### Cell styles
 
 `CELL_STYLE` controls how windows are drawn inside each cell:

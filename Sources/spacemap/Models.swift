@@ -17,8 +17,10 @@ struct GridConfig {
     var cellStyle: CellStyle
     var hotkey: HotkeyConfig
     var socketHealthInterval: Int
+    // Seconds to show the HUD after a desktop switch when it's hidden. 0 disables.
+    var autoShowDuration: Double
 
-    static let `default` = GridConfig(cols: 8, rows: 2, cellStyle: .rects, hotkey: .default, socketHealthInterval: 60)
+    static let `default` = GridConfig(cols: 8, rows: 2, cellStyle: .rects, hotkey: .default, socketHealthInterval: 60, autoShowDuration: 2.0)
 }
 
 struct YabaiSpace: Decodable {

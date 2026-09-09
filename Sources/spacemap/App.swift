@@ -17,7 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.socketListener = SocketListener(
                 socketPath: self.socketPath,
                 healthInterval: config.socketHealthInterval,
-                onEvent: { [weak self] in self?.hud.refresh() }
+                onEvent: { [weak self] in self?.hud.handleSpaceChange() }
             )
             YabaiClient.registerSignals(socketPath: self.socketPath)
         }
