@@ -91,6 +91,7 @@ config:
 		echo "#CELL_STYLE=hybrid" >> ~/.config/spacemap/config; \
 		echo "#HOTKEY=ctrl+pgdn" >> ~/.config/spacemap/config; \
 		echo "#SOCKET_HEALTH_INTERVAL=60" >> ~/.config/spacemap/config; \
+		echo "#AUTO_SHOW_DURATION=2" >> ~/.config/spacemap/config; \
 		echo "Created ~/.config/spacemap/config with defaults (8x2, icons)"; \
 	else \
 		echo "Config already exists at ~/.config/spacemap/config"; \
@@ -106,5 +107,6 @@ distconfig:
 	@echo "#CELL_STYLE=hybrid" >> ~/.config/spacemap/config
 	@echo "#HOTKEY=ctrl+pgdn" >> ~/.config/spacemap/config
 	@echo "#SOCKET_HEALTH_INTERVAL=60" >> ~/.config/spacemap/config
+	@echo "#AUTO_SHOW_DURATION=2" >> ~/.config/spacemap/config
 	@echo "Wrote ~/.config/spacemap/config"
 	@cat ~/.config/spacemap/config
