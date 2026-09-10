@@ -14,6 +14,7 @@ enum ConfigReader {
         var hotkey = GridConfig.default.hotkey
         var socketHealthInterval = GridConfig.default.socketHealthInterval
         var autoShowDuration = GridConfig.default.autoShowDuration
+        var spaceColors = GridConfig.default.spaceColors
 
         for line in contents.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -50,11 +51,35 @@ enum ConfigReader {
                 } else {
                     print("spacemap: invalid AUTO_SHOW_DURATION '\(value)', using default")
                 }
+            case "SPACE_COLORS":
+                spaceColors = parseHexList(value)
             default: break
             }
         }
 
-        return GridConfig(cols: cols, rows: rows, cellStyle: cellStyle, hotkey: hotkey, socketHealthInterval: socketHealthInterval, autoShowDuration: autoShowDuration)
+        return GridConfig(cols: cols, rows: rows, cellStyle: cellStyle, hotkey: hotkey, socketHealthInterval: socketHealthInterval, autoShowDuration: autoShowDuration, spaceColors: spaceColors)
+    }
+
+    // "54478C,#2C699A,0xF29E4C" -> [0x54478C, 0x2C699A, 0xF29E4C].
+    // Bad entries are warned about and dropped individually rather than voiding
+    // the whole palette -- a typo in one column shouldn't turn the feature off.
+    // Note an all-bad list yields [], which reads as "off"; GridConfig.color
+    // (forColumn:) guards that so it can't trap.
+    private static func parseHexList(_ value: String) -> [UInt32] {
+        var colors: [UInt32] = []
+        for raw in value.components(separatedBy: ",") {
+            let token = raw.trimmingCharacters(in: .whitespaces)
+            if token.isEmpty { continue }
+            var hex = token
+            if hex.hasPrefix("#") { hex.removeFirst() }
+            else if hex.lowercased().hasPrefix("0x") { hex.removeFirst(2) }
+            guard hex.count == 6, let parsed = UInt32(hex, radix: 16) else {
+                print("spacemap: invalid SPACE_COLORS entry '\(token)', skipping")
+                continue
+            }
+            colors.append(parsed)
+        }
+        return colors
     }
 
     private static func parseHotkey(_ value: String) -> HotkeyConfig? {

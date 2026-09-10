@@ -19,8 +19,20 @@ struct GridConfig {
     var socketHealthInterval: Int
     // Seconds to show the HUD after a desktop switch when it's hidden. 0 disables.
     var autoShowDuration: Double
+    // Per-column background tints as 0xRRGGBB, cycled when the count != cols.
+    // Empty means the feature is off and cells keep their plain dark fill.
+    // Stored numerically, not as SwiftUI Colors, to keep this file SwiftUI-free.
+    var spaceColors: [UInt32]
 
-    static let `default` = GridConfig(cols: 8, rows: 2, cellStyle: .rects, hotkey: .default, socketHealthInterval: 60, autoShowDuration: 2.0)
+    static let `default` = GridConfig(cols: 8, rows: 2, cellStyle: .rects, hotkey: .default, socketHealthInterval: 60, autoShowDuration: 2.0, spaceColors: [])
+
+    // The tint for a zero-based column, or nil when unconfigured. Cycling keeps
+    // short and long palettes on one path; the isEmpty guard is what stops
+    // `% count` from trapping on a key that parsed to nothing (SPACE_COLORS=).
+    func color(forColumn col: Int) -> UInt32? {
+        guard !spaceColors.isEmpty else { return nil }
+        return spaceColors[col % spaceColors.count]
+    }
 }
 
 struct YabaiSpace: Decodable {

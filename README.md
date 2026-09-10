@@ -111,6 +111,29 @@ CELL_STYLE=icons
 CELL_STYLE=hybrid
 ```
 
+### Column colors
+
+`SPACE_COLORS` assigns each grid column a color. The column holding the focused desktop lights
+up as a solid vertical band behind its cells, so you can see which column you're in at a glance
+without reading any numbers.
+
+```bash
+# Off by default. Comma-separated hex; #RRGGBB and 0xRRGGBB also accepted.
+SPACE_COLORS=54478C,2C699A,048BA8,0DB39E,16DB93,83E377,F1C453,F29E4C
+```
+
+Every desktop in a column shares its color: at `GRID_COLS=8`, desktops 8, 16 and 24 are all the
+last column, so focusing any of them lights the same band.
+
+The band fills the panel background behind the column — the gaps between cells and the padding
+above and below included — so it reads as one continuous strip. The cells themselves keep their
+normal dark fill, and the focused cell keeps its blue border and index, so "which column" and
+"which cell" stay independently readable.
+
+Colors cycle if you list fewer than `GRID_COLS`, and extras are ignored if you list more, so a
+short palette like `SPACE_COLORS=54478C,F29E4C` alternates. An unparseable entry is skipped with
+a warning and the rest still apply; omitting the key (or leaving it empty) turns the band off.
+
 ## Install ( in 5 steps )
 1. Install Pre-Requesits 
 2. Install spacemap
