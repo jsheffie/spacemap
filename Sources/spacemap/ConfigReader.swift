@@ -16,6 +16,7 @@ enum ConfigReader {
         var autoShowDuration = GridConfig.default.autoShowDuration
         var spaceColors = GridConfig.default.spaceColors
         var desktopColorMute = GridConfig.default.desktopColorMute
+        var columnNames = GridConfig.default.columnNames
 
         for line in contents.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -54,6 +55,8 @@ enum ConfigReader {
                 }
             case "SPACE_COLORS":
                 spaceColors = parseHexList(value)
+            case "COLUMN_NAMES":
+                columnNames = parseNameList(value)
             case "DESKTOP_COLOR_MUTE":
                 if let v = Double(value), v >= 0, v <= 1 {
                     desktopColorMute = v
@@ -64,7 +67,7 @@ enum ConfigReader {
             }
         }
 
-        return GridConfig(cols: cols, rows: rows, cellStyle: cellStyle, hotkey: hotkey, socketHealthInterval: socketHealthInterval, autoShowDuration: autoShowDuration, spaceColors: spaceColors, desktopColorMute: desktopColorMute)
+        return GridConfig(cols: cols, rows: rows, cellStyle: cellStyle, hotkey: hotkey, socketHealthInterval: socketHealthInterval, autoShowDuration: autoShowDuration, spaceColors: spaceColors, desktopColorMute: desktopColorMute, columnNames: columnNames)
     }
 
     // "54478C,#2C699A,0xF29E4C" -> [0x54478C, 0x2C699A, 0xF29E4C].
@@ -87,6 +90,18 @@ enum ConfigReader {
             colors.append(parsed)
         }
         return colors
+    }
+
+    // "chat,code,,web" -> ["chat", "code", "", "web"].
+    // Unlike parseHexList this keeps empty tokens instead of skipping them:
+    // positions are meaningful here, so dropping a blank would slide every later
+    // name one column to the left. There is nothing to validate -- any text is a
+    // legal name -- except that the surrounding KEY=VALUE loop splits on "=" and
+    // this splits on ",", so a name can contain neither.
+    private static func parseNameList(_ value: String) -> [String] {
+        value.components(separatedBy: ",").map {
+            $0.trimmingCharacters(in: .whitespaces)
+        }
     }
 
     private static func parseHotkey(_ value: String) -> HotkeyConfig? {

@@ -27,8 +27,12 @@ struct GridConfig {
     // band color itself, 0.0 is black. Wallpapers are muted by default because a
     // desktop is looked at all day where the HUD band is glanced at for a second.
     var desktopColorMute: Double
+    // Per-column header labels, positionally indexed: entry i names column i+1.
+    // Empty means the feature is off and no header row is drawn at all -- the
+    // panel then measures exactly as it did before the header existed.
+    var columnNames: [String]
 
-    static let `default` = GridConfig(cols: 8, rows: 2, cellStyle: .rects, hotkey: .default, socketHealthInterval: 60, autoShowDuration: 2.0, spaceColors: [], desktopColorMute: 0.38)
+    static let `default` = GridConfig(cols: 8, rows: 2, cellStyle: .rects, hotkey: .default, socketHealthInterval: 60, autoShowDuration: 2.0, spaceColors: [], desktopColorMute: 0.38, columnNames: [])
 
     // The tint for a zero-based column, or nil when unconfigured. Cycling keeps
     // short and long palettes on one path; the isEmpty guard is what stops
@@ -36,6 +40,18 @@ struct GridConfig {
     func color(forColumn col: Int) -> UInt32? {
         guard !spaceColors.isEmpty else { return nil }
         return spaceColors[col % spaceColors.count]
+    }
+
+    // The label for a zero-based column, or nil when unnamed. Deliberately does
+    // NOT cycle the way color(forColumn:) does: a short palette repeating across
+    // columns reads as intentional banding, but a repeated *name* would claim two
+    // columns are the same thing. Past the end of the list a column is unnamed.
+    // Blank entries are holes -- COLUMN_NAMES=a,,c leaves column 2 unnamed rather
+    // than shifting c left into it.
+    func name(forColumn col: Int) -> String? {
+        guard col >= 0, col < columnNames.count else { return nil }
+        let name = columnNames[col]
+        return name.isEmpty ? nil : name
     }
 }
 

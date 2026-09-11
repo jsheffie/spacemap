@@ -140,6 +140,34 @@ Colors cycle if you list fewer than `GRID_COLS`, and extras are ignored if you l
 short palette like `SPACE_COLORS=54478C,F29E4C` alternates. An unparseable entry is skipped with
 a warning and the rest still apply; omitting the key (or leaving it empty) turns the band off.
 
+### Column names
+
+`COLUMN_NAMES` labels each grid column. The names render as a header row across the top of the
+HUD, aligned over the columns they name, so a column can mean something ("code", "chat") instead
+of just being a position.
+
+```bash
+# Off by default. Comma-separated; the Nth name labels the Nth column.
+COLUMN_NAMES=chat,code,web,mail,docs,ops,media,scratch
+```
+
+Names sit above the grid rather than inside the cells because a cell is already carrying window
+rectangles and its index number; a header costs one row of height once instead of taking space
+from every cell.
+
+Unlike `SPACE_COLORS`, names do **not** cycle — a repeated color reads as intentional banding,
+but a repeated name would claim two columns are the same thing. List fewer names than
+`GRID_COLS` and the remaining columns are simply unlabeled; extras are ignored.
+
+Blank entries are holes, so `COLUMN_NAMES=chat,,web` leaves the second column unlabeled rather
+than sliding `web` into it. The label over the focused column is drawn on the color band, and
+switches between dark and light text based on that band's brightness so it stays readable across
+the whole palette.
+
+Because the config format splits on `=` and the list splits on `,`, a name can contain neither
+character. Omitting the key (or leaving it empty) removes the header row entirely and the panel
+is sized exactly as it was before.
+
 ### Desktop colors
 
 The column band only shows while the HUD is open. To carry the same cue all the time, spacemap
