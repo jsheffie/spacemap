@@ -308,6 +308,13 @@ class HUDWindowController {
         let cellHeight: CGFloat = 50
         let gap: CGFloat = 6
         let padding: CGFloat = 12
+        // Must match GridView's headerHeight and its showHeader condition: the
+        // header adds real height to the panel, and totalHeight below is what
+        // converts row indices into screen Y. If this doesn't grow with the panel,
+        // every hit rect shifts and drags land on the wrong desktop while the grid
+        // still looks perfectly correct.
+        let headerHeight: CGFloat = 14
+        let headerSpace: CGFloat = state.config.columnNames.isEmpty ? 0 : headerHeight + gap
         // Expand hit rects by half the gap on each side so there are no dead zones
         // between cells — the cursor always lands in whichever cell it's closest to.
         let slotWidth = cellWidth + gap
@@ -315,7 +322,7 @@ class HUDWindowController {
 
         var frames: [(spaceIndex: Int, frame: CGRect)] = []
         let origin = panel.frame.origin
-        let totalHeight = CGFloat(state.config.rows) * (cellHeight + gap) - gap + padding * 2
+        let totalHeight = CGFloat(state.config.rows) * (cellHeight + gap) - gap + padding * 2 + headerSpace
 
         // CGEvent.location uses top-left origin (Y increases downward).
         // NSPanel.frame uses bottom-left origin (Y increases upward).
@@ -330,7 +337,7 @@ class HUDWindowController {
                 let spaceIndex = row * state.config.cols + col + 1
                 let x = origin.x + padding + CGFloat(col) * (cellWidth + gap) - gap / 2
                 // AppKit top of this slot (highest AppKit Y):
-                let appKitSlotTop = origin.y + totalHeight - padding - CGFloat(row) * (cellHeight + gap) - gap / 2
+                let appKitSlotTop = origin.y + totalHeight - padding - headerSpace - CGFloat(row) * (cellHeight + gap) - gap / 2
                 // Convert to CGEvent Y (top-left origin): cgY = screenHeight - appKitTop
                 let cgY = screenHeight - appKitSlotTop
                 frames.append((spaceIndex: spaceIndex, frame: CGRect(x: x, y: cgY, width: slotWidth, height: slotHeight)))
