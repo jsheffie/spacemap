@@ -168,6 +168,33 @@ Because the config format splits on `=` and the list splits on `,`, a name can c
 character. Omitting the key (or leaving it empty) removes the header row entirely and the panel
 is sized exactly as it was before.
 
+### Renaming columns from the HUD
+
+Click a column's name in the header to rename it in place. Type, then **Enter** to save or
+**Esc** to discard. Clicking another column commits the current edit and moves to that one, so
+several columns can be renamed in a row.
+
+If `COLUMN_NAMES` is unset there is no header to click. Use **Rename columns…** in the menubar
+to start editing the first column; the header appears while you edit.
+
+Names typed in the HUD are saved to:
+
+```
+~/Library/Application Support/spacemap/column-names
+```
+
+They are kept there rather than written back into `~/.config/spacemap/config`, so spacemap never
+rewrites a file you maintain by hand — your comments and commented-out settings stay exactly as
+you left them. The file is the same `KEY=VALUE` format, so it stays readable and hand-fixable.
+
+**This file takes precedence over `COLUMN_NAMES`.** Once you have renamed a column in the HUD,
+editing `COLUMN_NAMES` in the config appears to do nothing, because the saved names win as a
+complete list. Pick **Reset column names** from the menubar (or delete the file) to discard them
+and go back to the config.
+
+Because the config format splits on `=` and the names list splits on `,`, neither character can
+be typed into a name. The HUD ignores them as you type.
+
 ### Desktop colors
 
 The column band only shows while the HUD is open. To carry the same cue all the time, spacemap

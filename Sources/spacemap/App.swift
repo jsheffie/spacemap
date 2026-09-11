@@ -58,6 +58,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(NSMenuItem(title: "Show/Hide Map", action: #selector(toggleHUD), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Repaint spacemap", action: #selector(repaintHUD), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Apply desktop colors", action: #selector(applyDesktopColors), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Rename columns…", action: #selector(renameColumns), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Reset column names", action: #selector(resetColumnNames), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Restart spacemap", action: #selector(restartApp), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Open Accessibility Permissions", action: #selector(openAccessibility), keyEquivalent: ""))
@@ -72,6 +74,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func repaintHUD() { hud.repaint() }
 
     @objc private func applyDesktopColors() { hud.applyDesktopColors() }
+    // Entry point for renaming when there is no header to click: COLUMN_NAMES unset
+    // means no header is drawn, so a fresh install has no click target (#52).
+    @objc private func renameColumns() { hud.beginEditing(column: 0) }
+    @objc private func resetColumnNames() { hud.resetColumnNames() }
 
     // The item is only ever *seen* when the menubar icon is clicked, so refresh at
     // display time too: fix the setting by hand, never open the HUD, click the menubar,

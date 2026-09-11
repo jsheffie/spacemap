@@ -3,6 +3,19 @@ import CoreGraphics
 
 enum ConfigReader {
     static func load() -> GridConfig {
+        var config = loadFromFile()
+        // HUD-edited names win over COLUMN_NAMES, and win as a whole list rather
+        // than per column (#52). Merging here, rather than at any of the call
+        // sites, is what lets showHeader / name(forColumn:) / idealSize /
+        // updateCellFrames stay unaware that the override exists. nil means no
+        // state file; an empty list is a real saved value and still overrides.
+        if let saved = ColumnNameStore.load() {
+            config.columnNames = saved
+        }
+        return config
+    }
+
+    private static func loadFromFile() -> GridConfig {
         let path = NSString(string: "~/.config/spacemap/config").expandingTildeInPath
         guard let contents = try? String(contentsOfFile: path, encoding: .utf8) else {
             return .default
@@ -98,7 +111,7 @@ enum ConfigReader {
     // name one column to the left. There is nothing to validate -- any text is a
     // legal name -- except that the surrounding KEY=VALUE loop splits on "=" and
     // this splits on ",", so a name can contain neither.
-    private static func parseNameList(_ value: String) -> [String] {
+    static func parseNameList(_ value: String) -> [String] {
         value.components(separatedBy: ",").map {
             $0.trimmingCharacters(in: .whitespaces)
         }
