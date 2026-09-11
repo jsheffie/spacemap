@@ -21,7 +21,7 @@ spacemap provides that missing visual reference on demand.
 - The active desktop is highlighted.
 - The view updates **live** as you switch spaces (it listens to yabai's `space_changed` signal via a Unix socket).
 - Click any cell → switches to that desktop and closes the HUD.
-- There's also a menu bar icon (grid symbol) for manual control, restarting, and opening Accessibility settings.
+- There's also a menu bar icon (grid symbol) for manual control, restarting, opening Accessibility settings, and applying the per-column desktop wallpaper colors.
 
 ## Requirements
 

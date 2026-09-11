@@ -122,6 +122,44 @@ class HUDWindowController {
         suppressAutoShowUntil = Date().addingTimeInterval(seconds)
     }
 
+    // Menubar "Apply desktop colors" (#47). This lives here rather than on
+    // AppDelegate because muting the HUD needs private state: suppression
+    // alone is not enough, since handleSpaceChange() returns early when the HUD is
+    // visible -- before the suppressAutoShowUntil guard -- so a walk with the HUD up
+    // would run a full blocking yabai triple-query on every one of N space changes.
+    func applyDesktopColors() {
+        runDesktopWalk { DesktopColorizer.applyColumnColors(config: $0) }
+    }
+
+    private func runDesktopWalk(_ walk: (GridConfig) -> DesktopColorizer.Result) {
+        // Fresh read: config is otherwise only reassigned in show()/handleSpaceChange(),
+        // so a palette edited since the last HUD open wouldn't be picked up here.
+        config = ConfigReader.load()
+        let wasSticky = visibility == .sticky
+
+        hide()
+        // The walk provokes one space_changed per desktop; the 1.0s default is nowhere
+        // near long enough to cover 24 of them.
+        let spaceCount = max(config.rows * config.cols, 1)
+        suppressAutoShow(for: Double(spaceCount) * 0.25 + 2.0)
+
+        // Preserve what the drag handler had captured: show() only re-captures the
+        // focused window when coming from .hidden, which is exactly where hide() left us,
+        // so a naive restore would replace the user's window with whatever ended up
+        // focused after the walk (see the note in show()).
+        let windowAtOpen = dragHandler.focusedWindowIDAtOpen
+
+        let result = walk(config)
+        print(result.summary)
+
+        // Leave the HUD as we found it -- the user asked to color desktops, not to close
+        // their map. The focused desktop is restored by the walk itself.
+        if wasSticky {
+            show(as: .sticky)
+            dragHandler.focusedWindowIDAtOpen = windowAtOpen
+        }
+    }
+
     private func scheduleAutoHide() {
         cancelAutoHide()
         // SocketListener marshals to main before calling us, so a run-loop Timer is safe.
