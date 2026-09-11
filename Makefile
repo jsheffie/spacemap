@@ -93,6 +93,7 @@ config:
 		echo "#SOCKET_HEALTH_INTERVAL=60" >> ~/.config/spacemap/config; \
 		echo "#AUTO_SHOW_DURATION=2" >> ~/.config/spacemap/config; \
 		echo "#SPACE_COLORS=54478C,2C699A,048BA8,0DB39E,16DB93,83E377,F1C453,F29E4C" >> ~/.config/spacemap/config; \
+		echo "#DESKTOP_COLOR_MUTE=0.38" >> ~/.config/spacemap/config; \
 		echo "Created ~/.config/spacemap/config with defaults (8x2, icons)"; \
 	else \
 		echo "Config already exists at ~/.config/spacemap/config"; \
@@ -110,5 +111,6 @@ distconfig:
 	@echo "#SOCKET_HEALTH_INTERVAL=60" >> ~/.config/spacemap/config
 	@echo "#AUTO_SHOW_DURATION=2" >> ~/.config/spacemap/config
 	@echo "#SPACE_COLORS=54478C,2C699A,048BA8,0DB39E,16DB93,83E377,F1C453,F29E4C" >> ~/.config/spacemap/config
+	@echo "#DESKTOP_COLOR_MUTE=0.38" >> ~/.config/spacemap/config
 	@echo "Wrote ~/.config/spacemap/config"
 	@cat ~/.config/spacemap/config

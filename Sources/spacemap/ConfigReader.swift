@@ -15,6 +15,7 @@ enum ConfigReader {
         var socketHealthInterval = GridConfig.default.socketHealthInterval
         var autoShowDuration = GridConfig.default.autoShowDuration
         var spaceColors = GridConfig.default.spaceColors
+        var desktopColorMute = GridConfig.default.desktopColorMute
 
         for line in contents.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -53,11 +54,17 @@ enum ConfigReader {
                 }
             case "SPACE_COLORS":
                 spaceColors = parseHexList(value)
+            case "DESKTOP_COLOR_MUTE":
+                if let v = Double(value), v >= 0, v <= 1 {
+                    desktopColorMute = v
+                } else {
+                    print("spacemap: invalid DESKTOP_COLOR_MUTE '\(value)' (want 0.0-1.0), using default")
+                }
             default: break
             }
         }
 
-        return GridConfig(cols: cols, rows: rows, cellStyle: cellStyle, hotkey: hotkey, socketHealthInterval: socketHealthInterval, autoShowDuration: autoShowDuration, spaceColors: spaceColors)
+        return GridConfig(cols: cols, rows: rows, cellStyle: cellStyle, hotkey: hotkey, socketHealthInterval: socketHealthInterval, autoShowDuration: autoShowDuration, spaceColors: spaceColors, desktopColorMute: desktopColorMute)
     }
 
     // "54478C,#2C699A,0xF29E4C" -> [0x54478C, 0x2C699A, 0xF29E4C].

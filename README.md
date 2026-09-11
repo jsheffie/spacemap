@@ -134,6 +134,40 @@ Colors cycle if you list fewer than `GRID_COLS`, and extras are ignored if you l
 short palette like `SPACE_COLORS=54478C,F29E4C` alternates. An unparseable entry is skipped with
 a warning and the rest still apply; omitting the key (or leaving it empty) turns the band off.
 
+### Desktop colors
+
+The column band only shows while the HUD is open. To carry the same cue all the time, spacemap
+can set each desktop's **real macOS wallpaper** to its column color, from the menubar:
+
+Pick **Apply desktop colors** from the menubar. It reuses `SPACE_COLORS`, so there is no
+separate palette to maintain, and it does nothing if `SPACE_COLORS` is unset. Desktops beyond
+`GRID_ROWS × GRID_COLS` are left alone, since the grid has no cell for them.
+
+The wallpapers are **muted** rather than the full band color, because a desktop is looked at all
+day where the HUD band is glanced at for a second. `DESKTOP_COLOR_MUTE` controls how much of the
+column color survives:
+
+```bash
+# 1.0 = the band color itself, 0.0 = black. Default 0.38.
+DESKTOP_COLOR_MUTE=0.38
+```
+
+At the default, the whole palette lands dark enough for window chrome and text to read normally
+on top. Raise it if the desktops read as "all just dark grey"; lower it if they're distracting.
+
+Setting a wallpaper only affects the desktop that's currently focused, so both actions have to
+walk every desktop in turn: expect a few seconds of visible flipping, ending back where you
+started. That's also why this is a manual menubar action and never runs automatically.
+
+Generated PNGs are cached in `~/Library/Application Support/spacemap/colors/`. macOS stores a
+*file reference* rather than the image itself, so **don't delete that directory** while desktops
+are using it — reinstalling spacemap (`make dev1`/`dev2`) doesn't touch it.
+
+> **There is no undo.** macOS only lets an app set a *still image*, so a dynamic system
+> wallpaper (the macOS default) can't be restored programmatically — spacemap deliberately
+> doesn't pretend otherwise. To go back, pick a wallpaper yourself in System Settings →
+> Wallpaper.
+
 ## Install ( in 5 steps )
 1. Install Pre-Requesits 
 2. Install spacemap

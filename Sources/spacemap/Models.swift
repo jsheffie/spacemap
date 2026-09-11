@@ -23,8 +23,12 @@ struct GridConfig {
     // Empty means the feature is off and cells keep their plain dark fill.
     // Stored numerically, not as SwiftUI Colors, to keep this file SwiftUI-free.
     var spaceColors: [UInt32]
+    // How much of a column's color survives into its desktop wallpaper: 1.0 is the
+    // band color itself, 0.0 is black. Wallpapers are muted by default because a
+    // desktop is looked at all day where the HUD band is glanced at for a second.
+    var desktopColorMute: Double
 
-    static let `default` = GridConfig(cols: 8, rows: 2, cellStyle: .rects, hotkey: .default, socketHealthInterval: 60, autoShowDuration: 2.0, spaceColors: [])
+    static let `default` = GridConfig(cols: 8, rows: 2, cellStyle: .rects, hotkey: .default, socketHealthInterval: 60, autoShowDuration: 2.0, spaceColors: [], desktopColorMute: 0.38)
 
     // The tint for a zero-based column, or nil when unconfigured. Cycling keeps
     // short and long palettes on one path; the isEmpty guard is what stops
