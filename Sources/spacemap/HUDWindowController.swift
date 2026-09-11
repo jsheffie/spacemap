@@ -26,6 +26,13 @@ class HUDWindowController {
     // Fired on every genuine HUD open. AppDelegate uses it to re-check the mru-spaces
     // setting (#22) without this controller needing to know menubar state exists.
     var onShow: (() -> Void)?
+    // Set when a transient->sticky promotion lands before the show's query does, so the
+    // refresh completion starts the drag handler the promotion couldn't. See toggle().
+    private var startDragHandlerOnNextRefresh = false
+    // The focused window a desktop walk must hand back to the reopened HUD, applied in
+    // show()'s completion because the walk can't write it after an async show. See
+    // runDesktopWalk().
+    private var pendingFocusedWindowRestore: Int?
 
     init() {
         dragHandler.onHoverCell = { [weak self] cell in
@@ -53,7 +60,16 @@ class HUDWindowController {
             cancelAutoHide()
             visibility = .sticky
             refreshState()
-            dragHandler.start()
+            // Starting the tap needs populated caches: on the empty-cache path drops get
+            // swallowed by the cellFrames.isEmpty guard and findDraggedWindowID falls back
+            // to a blocking main-thread query. If the transient show's round hasn't landed
+            // yet (refreshState() is async since #41), hand the job to the refresh
+            // completion rather than starting now or dropping it.
+            if currentState != nil {
+                dragHandler.start()
+            } else {
+                startDragHandlerOnNextRefresh = true
+            }
         case .sticky:
             hide()
         }
@@ -70,30 +86,68 @@ class HUDWindowController {
         show(as: .sticky)
     }
 
+    // Split across the yabai round trip (#41). Everything that decides *whether* and
+    // *how* to show happens synchronously here; everything that needs query results
+    // happens in the completion. visibility is assigned in this prologue rather than
+    // at the end: handleSpaceChange() branches on it, so leaving it .hidden for the
+    // ~50ms the queries take would let every space change in that window kick off
+    // another full show instead of superseding this one.
     private func show(as mode: Visibility) {
         config = ConfigReader.load()
-        let focusedIndex = YabaiClient.queryFocusedSpaceIndex()
 
-        if panel == nil { panel = makePanel() }
-        guard let panel else { return }
+        // Must be read before the assignment below. A genuine open is the only time we
+        // re-capture the focused window -- repainting an already-visible HUD must not
+        // replace the window the user had active with whatever happens to be focused
+        // now (repaint() and runDesktopWalk() both depend on this being false).
+        let isGenuineOpen = visibility == .hidden
+        // NSScreen is main-thread-only, so the background round can't read it itself.
+        let fallbackSize = NSScreen.main?.frame.size ?? CGSize(width: 2560, height: 1440)
 
-        let state = YabaiClient.buildGridState(config: config, focusedIndex: focusedIndex)
-        currentState = state
-        dragHandler.cachedWindows = state.windows
-        // Capture focused window before HUD renders, so drag handler knows what the user had active.
-        // Only on a genuine open: repainting an already-visible HUD must not replace
-        // the window the user had active with whatever happens to be focused now.
-        if visibility == .hidden {
-            dragHandler.focusedWindowIDAtOpen = (try? YabaiClient.queryFocusedWindow()) ?? nil
-        }
-        renderState(state, panel: panel)
-        updateCellFrames(state: state, panel: panel)
-        // Skip the global CGEventTap for a transient show: dragging a window into a HUD
-        // that vanishes in ~2s isn't a real workflow, and spinning the tap up and down on
-        // every desktop switch is pure churn. Promotion to sticky starts it.
-        if mode != .transient { dragHandler.start() }
         visibility = mode
-        onShow?()
+        let generation = YabaiClient.nextGeneration()
+
+        YabaiClient.buildGridSnapshotAsync(
+            config: config,
+            fallbackScreenSize: fallbackSize,
+            captureFocusedWindow: isGenuineOpen,
+            generation: generation
+        ) { [weak self] snapshot in
+            guard let self else { return }
+            // Consumed on every path, not just the success one: a superseded or
+            // hidden-out reopen must not leave a stale ID to be applied at some
+            // later, unrelated open.
+            let restore = pendingFocusedWindowRestore
+            pendingFocusedWindowRestore = nil
+            guard let snapshot else { return }
+            // A hide() between kickoff and landing wins: rendering here would put back
+            // a HUD the user just dismissed, and start() would revive a stopped tap.
+            guard visibility != .hidden else { return }
+
+            // Deferred to here so the panel is never ordered front empty and then
+            // filled a frame later -- a one-frame-late *refresh* is invisible, a
+            // one-frame-late first paint is not.
+            if panel == nil { panel = makePanel() }
+            guard let panel else { return }
+
+            let state = snapshot.state
+            currentState = state
+            dragHandler.cachedWindows = state.windows
+            if let restore {
+                // A desktop walk reopening the HUD: keep the window the user had before
+                // the walk, not whatever the walk left focused.
+                dragHandler.focusedWindowIDAtOpen = restore
+            } else if isGenuineOpen {
+                dragHandler.focusedWindowIDAtOpen = snapshot.focusedWindowID
+            }
+            renderState(state, panel: panel)
+            // After renderState: reads panel.frame.origin, which renderState sets.
+            updateCellFrames(state: state, panel: panel)
+            // Skip the global CGEventTap for a transient show: dragging a window into a HUD
+            // that vanishes in ~2s isn't a real workflow, and spinning the tap up and down on
+            // every desktop switch is pure churn. Promotion to sticky starts it.
+            if mode != .transient { dragHandler.start() }
+            onShow?()
+        }
     }
 
     // Called by SocketListener on space_changed.
@@ -159,8 +213,11 @@ class HUDWindowController {
         // Leave the HUD as we found it -- the user asked to color desktops, not to close
         // their map. The focused desktop is restored by the walk itself.
         if wasSticky {
+            // Assigned before show() rather than after: show() is async since #41, so a
+            // restore written here would be overwritten when the query lands. The
+            // pending value is applied inside the completion instead.
+            pendingFocusedWindowRestore = windowAtOpen
             show(as: .sticky)
-            dragHandler.focusedWindowIDAtOpen = windowAtOpen
         }
     }
 
@@ -182,14 +239,32 @@ class HUDWindowController {
         autoHideTimer = nil
     }
 
+    // Async since #41: shares one generation counter with show(), so whichever request
+    // was issued last wins regardless of which kind it was. Never captures
+    // focusedWindowIDAtOpen -- that belongs to a genuine open only.
     private func refreshState() {
-        guard let panel else { return }
-        let focused = YabaiClient.queryFocusedSpaceIndex()
-        let state = YabaiClient.buildGridState(config: config, focusedIndex: focused)
-        currentState = state
-        dragHandler.cachedWindows = state.windows
-        renderState(state, panel: panel)
-        updateCellFrames(state: state, panel: panel)
+        let fallbackSize = NSScreen.main?.frame.size ?? CGSize(width: 2560, height: 1440)
+        let generation = YabaiClient.nextGeneration()
+
+        YabaiClient.buildGridSnapshotAsync(
+            config: config,
+            fallbackScreenSize: fallbackSize,
+            captureFocusedWindow: false,
+            generation: generation
+        ) { [weak self] snapshot in
+            guard let self, let snapshot else { return }
+            guard visibility != .hidden, let panel else { return }
+
+            let state = snapshot.state
+            currentState = state
+            dragHandler.cachedWindows = state.windows
+            renderState(state, panel: panel)
+            updateCellFrames(state: state, panel: panel)
+            if startDragHandlerOnNextRefresh {
+                startDragHandlerOnNextRefresh = false
+                dragHandler.start()
+            }
+        }
     }
 
     private func renderState(_ state: GridState, panel: NSPanel) {
@@ -224,6 +299,8 @@ class HUDWindowController {
         visibility = .hidden
         hoveredCell = nil
         currentState = nil
+        startDragHandlerOnNextRefresh = false
+        pendingFocusedWindowRestore = nil
     }
 
     private func updateCellFrames(state: GridState, panel: NSPanel) {
