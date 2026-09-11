@@ -125,4 +125,17 @@ struct GridState {
               let frame = displayFrames[space.display] else { return displayBounds }
         return frame
     }
+
+    // The same snapshot with a newer config. config is captured when the snapshot is
+    // built, so a config change made between yabai queries -- renaming a column in the
+    // HUD (#52) -- would otherwise not reach the view until the next query rebuilt the
+    // whole state, which is why a committed name only appeared after a desktop switch.
+    func with(config newConfig: GridConfig) -> GridState {
+        GridState(config: newConfig,
+                  spaces: spaces,
+                  windows: windows,
+                  displayFrames: displayFrames,
+                  displayBounds: displayBounds,
+                  focusedIndex: focusedIndex)
+    }
 }

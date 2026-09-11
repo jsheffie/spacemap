@@ -4,6 +4,12 @@ struct GridView: View {
     let state: GridState
     let hoveredCell: Int?
     let onSelect: (Int) -> Void
+    // Column being renamed and its in-progress text, or nil when not editing (#52).
+    // Passed in from the controller rather than held as @State: renderState builds
+    // a fresh NSHostingView on every render, so @State would be lost mid-edit.
+    var editingColumn: Int? = nil
+    var editBuffer: String = ""
+    var onEditColumn: ((Int) -> Void)? = nil
 
     private let cellWidth: CGFloat = 80
     private let cellHeight: CGFloat = 50
@@ -16,7 +22,9 @@ struct GridView: View {
     // drag hit rects stop lining up with what's drawn.
     private let headerHeight: CGFloat = 14
 
-    private var showHeader: Bool { !state.config.columnNames.isEmpty }
+    // Also shown while editing: with COLUMN_NAMES unset there are no names and so
+    // no header, and an edit started from the menubar would have nowhere to draw.
+    private var showHeader: Bool { !state.config.columnNames.isEmpty || editingColumn != nil }
 
     var body: some View {
         VStack(spacing: gap) {
@@ -58,15 +66,47 @@ struct GridView: View {
     private var header: some View {
         HStack(spacing: gap) {
             ForEach(0..<state.config.cols, id: \.self) { col in
-                Text(state.config.name(forColumn: col) ?? "")
-                    .font(.system(size: 10, weight: .medium))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .foregroundColor(headerColor(forColumn: col))
+                headerCell(col)
                     .frame(width: cellWidth)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onEditColumn?(col) }
             }
         }
         .frame(height: headerHeight)
+    }
+
+    @ViewBuilder
+    private func headerCell(_ col: Int) -> some View {
+        if editingColumn == col {
+            // The caret is drawn rather than supplied by a focused text field:
+            // nothing in this panel can be first responder (see TextInputMonitor).
+            HStack(spacing: 1) {
+                Text(editBuffer)
+                    .font(.system(size: 10, weight: .medium))
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                    .foregroundColor(headerColor(forColumn: col))
+                Rectangle()
+                    .fill(headerColor(forColumn: col))
+                    .frame(width: 1, height: 11)
+            }
+            .padding(.horizontal, 3)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.black.opacity(0.35))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .strokeBorder(Color(hex: 0x4a9eff), lineWidth: 1)
+                    )
+            )
+        } else {
+            Text(state.config.name(forColumn: col) ?? "")
+                .font(.system(size: 10, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .foregroundColor(headerColor(forColumn: col))
+        }
     }
 
     // The focused column's label sits on the color band, so it has to stay legible

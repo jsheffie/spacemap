@@ -29,6 +29,19 @@ class HUDWindowController {
     // Set when a transient->sticky promotion lands before the show's query does, so the
     // refresh completion starts the drag handler the promotion couldn't. See toggle().
     private var startDragHandlerOnNextRefresh = false
+    // Column-name editing (#52). Deliberately NOT a Visibility case: that enum
+    // means *why* the HUD is on screen, and an edit has to hand back to whichever
+    // of .sticky/.transient was in effect when it started. Kept on the controller
+    // rather than in SwiftUI @State because renderState rebuilds the whole
+    // NSHostingView on every render -- @State would not survive a space_changed.
+    private var editingColumn: Int? = nil
+    // Set when an edit is requested while the HUD is still opening; consumed by
+    // show()'s completion. A timer would be a race -- show() is async since #41,
+    // so a slow yabai round trip would leave the user typing into nothing.
+    private var beginEditOnNextRender: Int? = nil
+    private var editBuffer: String = ""
+    private let textInput = TextInputMonitor()
+    private var isEditing: Bool { editingColumn != nil }
     // The focused window a desktop walk must hand back to the reopened HUD, applied in
     // show()'s completion because the walk can't write it after an async show. See
     // runDesktopWalk().
@@ -36,7 +49,7 @@ class HUDWindowController {
 
     init() {
         dragHandler.onHoverCell = { [weak self] cell in
-            guard let self, visibility != .hidden, let state = currentState else { return }
+            guard let self, visibility != .hidden, !isEditing, let state = currentState else { return }
             hoveredCell = cell
             if let p = panel { renderState(state, panel: p) }
         }
@@ -50,6 +63,14 @@ class HUDWindowController {
     }
 
     func toggle() {
+        // The hotkey fires through HotkeyMonitor, which has no stop() and cannot be
+        // suppressed, so an in-flight edit is defended here rather than by relying
+        // on which tap sees the key first. Ctrl+<hotkey> mid-edit commits the name
+        // instead of hiding the HUD out from under it.
+        if isEditing {
+            commitEditing()
+            return
+        }
         switch visibility {
         case .hidden:
             show(as: .sticky)
@@ -146,6 +167,10 @@ class HUDWindowController {
             // that vanishes in ~2s isn't a real workflow, and spinning the tap up and down on
             // every desktop switch is pure churn. Promotion to sticky starts it.
             if mode != .transient { dragHandler.start() }
+            if let pending = beginEditOnNextRender {
+                beginEditOnNextRender = nil
+                beginEditing(column: pending)
+            }
             onShow?()
         }
     }
@@ -154,6 +179,11 @@ class HUDWindowController {
     // If the HUD is already up, keep it current (rules 1 & 3). If it's hidden, flash it
     // up for config.autoShowDuration seconds (rule 2).
     func handleSpaceChange() {
+        // A background desktop switch must not disturb an edit: refreshState()
+        // re-renders (destroying the hosting view the caret is drawn in) and the
+        // transient branch would re-arm the auto-hide timer under a user who is
+        // still typing.
+        if isEditing { return }
         if visibility != .hidden {
             refreshState()
             // Rule 3: another switch inside the window restarts the timer from 0.
@@ -172,6 +202,101 @@ class HUDWindowController {
 
         show(as: .transient)
         scheduleAutoHide()
+    }
+
+    // MARK: - Column name editing (#52)
+
+    // Entered by clicking a column header, or from the menubar when there is no
+    // header to click (COLUMN_NAMES unset means showHeader is false, so a fresh
+    // install has no click target).
+    func beginEditing(column: Int) {
+        guard column >= 0, column < config.cols else { return }
+        // Editing while hidden would type into nothing; open first, and hand the
+        // edit to show()'s completion rather than guessing at a delay.
+        guard visibility != .hidden else {
+            beginEditOnNextRender = column
+            show(as: .sticky)
+            return
+        }
+        // A pending auto-hide would yank the HUD away mid-edit. The edit makes this
+        // sticky: there is no sensible way to "time out" a half-typed name.
+        cancelAutoHide()
+        visibility = .sticky
+        editingColumn = column
+        editBuffer = config.name(forColumn: column) ?? ""
+        textInput.onCharacter = { [weak self] text in self?.appendToEdit(text) }
+        textInput.onBackspace = { [weak self] in self?.backspaceEdit() }
+        textInput.onCommit = { [weak self] in self?.commitEditing() }
+        textInput.onCancel = { [weak self] in self?.cancelEditing(rerender: true) }
+        textInput.start()
+        rerenderForEdit()
+    }
+
+    func commitEditing() {
+        guard let column = editingColumn else { return }
+        // Pad to the full width so column N's name lands at index N even when the
+        // earlier columns are unnamed -- the list is positional.
+        var names = config.columnNames
+        if names.count < config.cols {
+            names.append(contentsOf: Array(repeating: "", count: config.cols - names.count))
+        }
+        // Trimmed because parseNameList trims on read: an all-whitespace name would
+        // come back as "" anyway, so store it as the blank it will become.
+        names[column] = editBuffer.trimmingCharacters(in: .whitespaces)
+        ColumnNameStore.save(names)
+        endEditing()
+        // Re-read so the merged value flows back through the normal path rather
+        // than being poked into config here.
+        config = ConfigReader.load()
+        // GridView reads names off state.config, not this config, and GridState
+        // captures its config when the snapshot is built. Without restamping,
+        // the committed name only appeared once the next yabai query rebuilt
+        // currentState -- i.e. after a desktop switch.
+        currentState = currentState?.with(config: config)
+        rerenderForEdit()
+    }
+
+    // rerender defaults off so hide() can tear down edit state without painting a
+    // panel it is about to order out.
+    func cancelEditing(rerender: Bool = false) {
+        guard isEditing else { return }
+        endEditing()
+        if rerender { rerenderForEdit() }
+    }
+
+    func resetColumnNames() {
+        cancelEditing()
+        ColumnNameStore.reset()
+        config = ConfigReader.load()
+        currentState = currentState?.with(config: config)
+        if visibility != .hidden { rerenderForEdit() }
+    }
+
+    private func endEditing() {
+        textInput.stop()
+        editingColumn = nil
+        editBuffer = ""
+    }
+
+    private func appendToEdit(_ text: String) {
+        guard isEditing else { return }
+        editBuffer += text
+        rerenderForEdit()
+    }
+
+    private func backspaceEdit() {
+        guard isEditing, !editBuffer.isEmpty else { return }
+        editBuffer.removeLast()
+        rerenderForEdit()
+    }
+
+    // Paired with updateCellFrames, not renderState alone: starting an edit on an
+    // unset COLUMN_NAMES makes the header appear, which makes the panel taller and
+    // moves every cell -- leaving the drag hit rects pointing at the old positions.
+    private func rerenderForEdit() {
+        guard let panel, let state = currentState else { return }
+        renderState(state, panel: panel)
+        updateCellFrames(state: state, panel: panel)
     }
 
     // Called before spacemap's own yabai space mutations, so the space_changed signal
@@ -269,11 +394,24 @@ class HUDWindowController {
 
     private func renderState(_ state: GridState, panel: NSPanel) {
         let hovered = hoveredCell
-        let gridView = GridView(state: state, hoveredCell: hovered) { [weak self] index in
-            self?.suppressAutoShow()
-            YabaiClient.focusSpace(index)
-            self?.hide()
-        }
+        let gridView = GridView(
+            state: state,
+            hoveredCell: hovered,
+            onSelect: { [weak self] index in
+                self?.suppressAutoShow()
+                YabaiClient.focusSpace(index)
+                self?.hide()
+            },
+            editingColumn: editingColumn,
+            editBuffer: editBuffer,
+            onEditColumn: { [weak self] col in
+                guard let self else { return }
+                // Clicking a different column while editing commits the current one,
+                // so renaming several in a row doesn't silently discard each.
+                if isEditing { commitEditing() }
+                beginEditing(column: col)
+            }
+        )
         let size = gridView.idealSize
 
         let hostingView = NSHostingView(rootView: gridView)
@@ -294,12 +432,14 @@ class HUDWindowController {
         // Load-bearing: a manual hide during a transient window would otherwise leave a
         // live timer that later hides a HUD the user has since deliberately shown.
         cancelAutoHide()
+        cancelEditing()
         panel?.orderOut(nil)
         dragHandler.stop()
         visibility = .hidden
         hoveredCell = nil
         currentState = nil
         startDragHandlerOnNextRefresh = false
+        beginEditOnNextRender = nil
         pendingFocusedWindowRestore = nil
     }
 
@@ -314,7 +454,11 @@ class HUDWindowController {
         // every hit rect shifts and drags land on the wrong desktop while the grid
         // still looks perfectly correct.
         let headerHeight: CGFloat = 14
-        let headerSpace: CGFloat = state.config.columnNames.isEmpty ? 0 : headerHeight + gap
+        // Must match GridView.showHeader exactly, editing included: starting an edit
+        // with COLUMN_NAMES unset makes the header appear, and a panel that grew by
+        // a header while this still read 0 would offset every hit rect by 20pt.
+        let showsHeader = !state.config.columnNames.isEmpty || editingColumn != nil
+        let headerSpace: CGFloat = showsHeader ? headerHeight + gap : 0
         // Expand hit rects by half the gap on each side so there are no dead zones
         // between cells — the cursor always lands in whichever cell it's closest to.
         let slotWidth = cellWidth + gap
