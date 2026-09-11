@@ -248,6 +248,11 @@ class HUDWindowController {
         // Re-read so the merged value flows back through the normal path rather
         // than being poked into config here.
         config = ConfigReader.load()
+        // GridView reads names off state.config, not this config, and GridState
+        // captures its config when the snapshot is built. Without restamping,
+        // the committed name only appeared once the next yabai query rebuilt
+        // currentState -- i.e. after a desktop switch.
+        currentState = currentState?.with(config: config)
         rerenderForEdit()
     }
 
@@ -263,6 +268,7 @@ class HUDWindowController {
         cancelEditing()
         ColumnNameStore.reset()
         config = ConfigReader.load()
+        currentState = currentState?.with(config: config)
         if visibility != .hidden { rerenderForEdit() }
     }
 
