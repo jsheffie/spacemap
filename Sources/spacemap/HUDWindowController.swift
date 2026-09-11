@@ -23,6 +23,9 @@ class HUDWindowController {
     // the thumbnail layout doesn't flicker during a drag and cachedWindows stays stable.
     private var currentState: GridState? = nil
     let dragHandler = WindowDragHandler()
+    // Fired on every genuine HUD open. AppDelegate uses it to re-check the mru-spaces
+    // setting (#22) without this controller needing to know menubar state exists.
+    var onShow: (() -> Void)?
 
     init() {
         dragHandler.onHoverCell = { [weak self] cell in
@@ -90,6 +93,7 @@ class HUDWindowController {
         // every desktop switch is pure churn. Promotion to sticky starts it.
         if mode != .transient { dragHandler.start() }
         visibility = mode
+        onShow?()
     }
 
     // Called by SocketListener on space_changed.
