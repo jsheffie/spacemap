@@ -48,6 +48,12 @@ Window positions are drawn as colored rectangles inside each cell (one color per
 - [yabai](https://github.com/koekeishiya/yabai) installed at `/opt/homebrew/bin/yabai` and running
 - [skhd](https://github.com/asmvik/skhd) installed at `/opt/homebrew/bin/skhd` and running
 - Accessibility permission (prompted on first launch). This is not the same as disabling SIP protection, which is not required.
+- **Automatically rearrange Spaces based on most recent use** must be OFF
+  (System Settings → Desktop & Dock → Mission Control). spacemap's grid assumes desktop N stays in
+  position N; with this on, macOS reorders your spaces and the map points at the wrong desktop.
+  spacemap detects this and offers to fix it from the menubar, or set it yourself:
+
+      defaults write com.apple.dock mru-spaces -bool false && killall Dock
 
 
 

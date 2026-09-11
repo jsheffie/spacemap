@@ -1,11 +1,15 @@
 import AppKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let hud = HUDWindowController()
     private var hotkey: HotkeyMonitor?
     private var socketListener: SocketListener?
     private let socketPath = "/tmp/spacemap_\(NSUserName()).socket"
     private var statusItem: NSStatusItem?
+    // Both hidden unless mru-spaces is wrong (#22). Stored so refreshOrderingWarning()
+    // can toggle them without rebuilding the menu.
+    private var fixOrderingItem: NSMenuItem?
+    private var fixOrderingSeparator: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.prohibited)
@@ -20,7 +24,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 onEvent: { [weak self] in self?.hud.handleSpaceChange() }
             )
             YabaiClient.registerSignals(socketPath: self.socketPath)
+            self.refreshOrderingWarning()
         }
+        // Re-check whenever the HUD opens, so the warning clears itself as soon as the
+        // user fixes the setting -- by any route, including System Settings directly.
+        hud.onShow = { [weak self] in self?.refreshOrderingWarning() }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -34,6 +42,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.image = NSImage(systemSymbolName: "square.grid.3x3", accessibilityDescription: "spacemap")
         }
         let menu = NSMenu()
+        menu.delegate = self
+        // The space-ordering warning sits above everything, hidden unless it applies:
+        // a permanently visible item advertising a problem you don't have is clutter.
+        let fixItem = NSMenuItem(title: "⚠ Fix Space Ordering…", action: #selector(fixSpaceOrdering), keyEquivalent: "")
+        let fixSeparator = NSMenuItem.separator()
+        fixItem.isHidden = true
+        fixSeparator.isHidden = true
+        menu.addItem(fixItem)
+        menu.addItem(fixSeparator)
+        fixOrderingItem = fixItem
+        fixOrderingSeparator = fixSeparator
         // Everyday actions first, then the occasional permissions trip, then quit --
         // each group separated so the destructive item isn't adjacent to a common one.
         menu.addItem(NSMenuItem(title: "Show/Hide Map", action: #selector(toggleHUD), keyEquivalent: ""))
@@ -53,6 +72,98 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func repaintHUD() { hud.repaint() }
 
     @objc private func applyDesktopColors() { hud.applyDesktopColors() }
+
+    // The item is only ever *seen* when the menubar icon is clicked, so refresh at
+    // display time too: fix the setting by hand, never open the HUD, click the menubar,
+    // and the warning would otherwise be stale.
+    func menuWillOpen(_ menu: NSMenu) {
+        refreshOrderingWarning()
+    }
+
+    private func refreshOrderingWarning() {
+        let needsFixing = MRUSpaces.needsFixing()
+        fixOrderingItem?.isHidden = !needsFixing
+        fixOrderingSeparator?.isHidden = !needsFixing
+        let symbol = needsFixing ? "exclamationmark.triangle.fill" : "square.grid.3x3"
+        statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "spacemap")
+    }
+
+    @objc private func fixSpaceOrdering() {
+        let alert = NSAlert()
+        alert.messageText = "Fix space ordering?"
+        alert.informativeText = """
+            spacemap needs desktops to stay in a fixed order, but macOS is set to rearrange \
+            them by most recent use — so the grid may point at the wrong desktop.
+
+            "Fix It" turns off that setting and restarts the Dock. Your windows and desktops \
+            are not affected, but the Dock will disappear for a second.
+            """
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Fix It")
+        alert.addButton(withTitle: "Open Settings")
+        alert.addButton(withTitle: "Cancel")
+        alert.buttons.last?.keyEquivalent = "\u{1b}"
+
+        // Same activation dance as confirmQuit: the app is .prohibited, so without
+        // borrowing .regular the alert opens behind whatever the user is looking at.
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        let response = alert.runModal()
+        NSApp.setActivationPolicy(.prohibited)
+
+        switch response {
+        case .alertFirstButtonReturn:
+            applyOrderingFix()
+        case .alertSecondButtonReturn:
+            openMissionControlSettings()
+        default:
+            break
+        }
+    }
+
+    private func applyOrderingFix() {
+        guard MRUSpaces.disableRearranging() else {
+            presentOrderingFixFailure()
+            return
+        }
+        // killall Dock restarts the process that owns Mission Control, so cached space
+        // indices can shift underneath us. Give the Dock a moment to come back, then
+        // re-query rather than trusting what we had. repaint() re-reads config and
+        // rebuilds the grid from a fresh yabai query.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.refreshOrderingWarning()
+            self?.hud.repaint()
+        }
+    }
+
+    private func presentOrderingFixFailure() {
+        let alert = NSAlert()
+        alert.messageText = "Couldn't change the setting"
+        alert.informativeText = """
+            spacemap couldn't turn off "Automatically rearrange Spaces based on most recent \
+            use". You can change it yourself in System Settings → Desktop & Dock → Mission \
+            Control.
+            """
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Open Settings")
+        alert.addButton(withTitle: "Cancel")
+        alert.buttons.last?.keyEquivalent = "\u{1b}"
+
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        let response = alert.runModal()
+        NSApp.setActivationPolicy(.prohibited)
+
+        if response == .alertFirstButtonReturn { openMissionControlSettings() }
+    }
+
+    // Desktop & Dock is the Dock pane (Expose.prefPane has no usable Info.plist on
+    // macOS 15). Note the window opens on whichever space System Settings last used,
+    // not necessarily the current one.
+    private func openMissionControlSettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.dock")!
+        NSWorkspace.shared.open(url)
+    }
 
     @objc private func confirmQuit() {
         let alert = NSAlert()
